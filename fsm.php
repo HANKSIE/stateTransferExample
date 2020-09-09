@@ -1,76 +1,47 @@
 <?php
+session_start();
+
 
 class State
 {
-    private $targets = [];
-    private $dynamicCallback = null;
-
-    public function addTargets(...$args)
-    {
-        $this->targets = array_merge($this->targets, $args);
-    }
-
-    public function dynamic($callback)
-    {
-        $this->dynamicCallback = $callback;
-    }
-
-    public function __get($property)
-    {
-        if (property_exists($this, $property)) {
-            return $this->$property;
-        }
-    }
+    /**
+     * @property {Callback} $destination - 回傳要前往的狀態名稱
+     * @return {Array.<String>}
+     */
+    public $destination;
 }
 
 class StateTransfer
 {
+    private $stateTable;
 
-    private $curr = "";
-    private $prev = "";
-    private $stateTable = "";
-
-    function  __construct($init, $stateTable)
+    function  __construct($stateTable)
     {
-        $this->curr =  $init;
         $this->stateTable = $stateTable;
     }
 
-    public function __get($property)
+    /**
+     * @param {String} $curr - 當前狀態名稱
+     */
+    public function fetchCanGo($curr)
     {
-        if (property_exists($this, $property)) {
-            return $this->$property;
-        }
+        $destination = $this->stateTable[$curr]->destination;
+        return $destination();
     }
 
-    public function nextStates()
+    /**
+     * @param {String} $curr - 當前狀態名稱
+     * @param {String} $next - 要前往的狀態名稱
+     */
+    public function canGo($curr, $next)
     {
-        $dynamicCallback = $this->stateTable[$this->curr]->dynamicCallback;
-        if (is_callable($dynamicCallback)) {
-            return $dynamicCallback($this->prev);
-        }
-
-        return $this->getStates($this->stateTable[$this->curr]->targets);
-    }
-
-    private function getStates($states)
-    {
-        return array_map(function ($state) {
-            return array_search($state, $this->stateTable);
-        }, $states);
-    }
-
-    public function go($next)
-    {
-        if (in_array($next, $this->nextStates(), true)) {
-            $this->prev =  $this->curr;
-            $this->curr = $next;
-            return true;
-        }
-        return false;
+        return in_array($next, $this->fetchCanGo($curr), true) && $curr != $next;
     }
 }
 
+/**
+ * 新增狀態
+ */
 $notShipped = new State();
 $shipped = new State();
 $returnApply = new State();
@@ -78,26 +49,65 @@ $complete = new State();
 $cancel = new State();
 $failure = new State();
 
+/**
+ * 字串常數
+ */
+const NOT_SHIPPED = '未出貨';
+const SHIPPED = '已出貨';
+const RETURN_APPLY = '退貨申請中';
+const COMPLETE = '訂單完成';
+const CANCEL = '訂單取消';
+const FAILURE = '訂單失效';
+
+/**
+ * 字串=>狀態對應
+ */
 $stateTable = [
-    '未出貨' => $notShipped,
-    '已出貨' => $shipped,
-    '退貨申請中' => $returnApply,
-    '訂單完成' => $complete,
-    '訂單取消' => $cancel,
-    '訂單失效' => $failure,
+    NOT_SHIPPED => $notShipped,
+    SHIPPED => $shipped,
+    RETURN_APPLY => $returnApply,
+    COMPLETE => $complete,
+    CANCEL => $cancel,
+    FAILURE => $failure,
 ];
 
-$notShipped->addTargets($returnApply, $shipped);
-$shipped->addTargets($complete, $returnApply);
-$returnApply->addTargets($notShipped, $shipped, $complete, $cancel);
-$complete->addTargets($returnApply);
+$notShipped->destination = function () {
+    return [RETURN_APPLY, SHIPPED];
+};
+$shipped->destination = function () {
+    return [COMPLETE, RETURN_APPLY];
+};
+$complete->destination = function () {
+    return [RETURN_APPLY];
+};
 
-$returnApply->dynamic(function ($prev) {
-    return [$prev, '訂單取消'];
-});
+$returnApply->destination = function () {
+    return [$_SESSION['item']['prev'], CANCEL];
+};
 
-$state = $_POST['state'];
-$itemTransfer = new StateTransfer(isset($state) ? $state : '未出貨', $stateTable);
+$cancel->destination = function () {
+    return [];
+};
+
+$failure->destination = function () {
+    return [];
+};
+
+if (empty($_SESSION)) {
+    $_SESSION['item'] = [
+        'curr' => NOT_SHIPPED,
+        'prev' => null,
+    ];
+}
+$itemTransfer = new StateTransfer($stateTable);
+if (isset($_POST['next'])) {
+    if ($itemTransfer->canGo($_SESSION['item']['curr'], $_POST['next'])) {
+        $_SESSION['item']['prev'] = $_SESSION['item']['curr'];
+        $_SESSION['item']['curr'] = $_POST['next'];
+    }
+}
+
+$transfer = $itemTransfer->fetchCanGo($_SESSION['item']['curr']);
 
 /*
 狀態對應:

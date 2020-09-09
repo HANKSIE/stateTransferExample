@@ -11,9 +11,9 @@
     <?php require("./fsm.php") ?>
     <form action="./index.php" method="post">
 
-        <select name="state">
-            <option selected disabled value="<?= $itemTransfer->curr ?>"><?= $itemTransfer->curr ?></option>
-            <?php foreach ($itemTransfer->nextStates() as $state) : ?>
+        <select name="next">
+            <option selected disabled value="<?= $_SESSION['item']['curr'] ?>"><?= $_SESSION['item']['curr'] ?></option>
+            <?php foreach ($transfer as $state) : ?>
                 <option value="<?= $state ?>"><?= $state ?></option>
             <?php endforeach; ?>
         </select>
