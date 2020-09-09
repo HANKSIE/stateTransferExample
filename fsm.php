@@ -1,16 +1,6 @@
 <?php
 session_start();
 
-
-class State
-{
-    /**
-     * @property {Callback} $destination - 回傳要前往的狀態名稱
-     * @return {Array.<String>}
-     */
-    public $destination;
-}
-
 class StateTransfer
 {
     private $stateTable;
@@ -25,7 +15,7 @@ class StateTransfer
      */
     public function fetchCanGo($curr)
     {
-        $destination = $this->stateTable[$curr]->destination;
+        $destination = $this->stateTable[$curr];
         return $destination();
     }
 
@@ -40,16 +30,6 @@ class StateTransfer
 }
 
 /**
- * 新增狀態
- */
-$notShipped = new State();
-$shipped = new State();
-$returnApply = new State();
-$complete = new State();
-$cancel = new State();
-$failure = new State();
-
-/**
  * 字串常數
  */
 const NOT_SHIPPED = '未出貨';
@@ -58,6 +38,28 @@ const RETURN_APPLY = '退貨申請中';
 const COMPLETE = '訂單完成';
 const CANCEL = '訂單取消';
 const FAILURE = '訂單失效';
+
+$notShipped = function () {
+    return [RETURN_APPLY, SHIPPED];
+};
+$shipped = function () {
+    return [COMPLETE, RETURN_APPLY];
+};
+$complete = function () {
+    return [RETURN_APPLY];
+};
+
+$returnApply = function () {
+    return [$_SESSION['item']['prev'], CANCEL];
+};
+
+$cancel = function () {
+    return [];
+};
+
+$failure = function () {
+    return [];
+};
 
 /**
  * 字串=>狀態對應
@@ -70,28 +72,6 @@ $stateTable = [
     CANCEL => $cancel,
     FAILURE => $failure,
 ];
-
-$notShipped->destination = function () {
-    return [RETURN_APPLY, SHIPPED];
-};
-$shipped->destination = function () {
-    return [COMPLETE, RETURN_APPLY];
-};
-$complete->destination = function () {
-    return [RETURN_APPLY];
-};
-
-$returnApply->destination = function () {
-    return [$_SESSION['item']['prev'], CANCEL];
-};
-
-$cancel->destination = function () {
-    return [];
-};
-
-$failure->destination = function () {
-    return [];
-};
 
 if (empty($_SESSION)) {
     $_SESSION['item'] = [
